@@ -257,66 +257,58 @@
         // Handle show button click
         showBtn.addEventListener('click', async () => {
             const file = imageInput.files[0];
-            
+            const selectedType = document.querySelector('input[name="imageType"]:checked').value;
+
             if (!file) {
                 alert("Please select an image file first.");
                 return;
             }
 
-            // UI updates for loading state
             showBtn.disabled = true;
             loadingIndicator.style.display = 'block';
             resultArea.style.display = 'none';
             resultArea.classList.remove('error');
 
             try {
-                // Connect to Hugging Face space
                 const app = await Client.connect("CGAllenger/BTech");
-                
-                // Call predict endpoint
-                const result = await app.predict("/predict", [
-                    file
-                ]);
+
+                // We determine the endpoint index based on your Tabs in app.py
+                // Tab 0 is MRI, Tab 1 is X-Ray
+                const endpointIndex = (selectedType === 'MRI') ? 0 : 1;
+
+                // Use the index number instead of "/predict"
+                const result = await app.predict(endpointIndex, [file]);
 
                 let topLabel = "Unknown";
                 let topProb = 0;
 
+                // Gradio Labels usually return data in result.data[0].confidences
                 const data = result.data[0];
-                
-                // Extract highest probability label depending on Gradio's output format
-                if (data && data.confidences && data.confidences.length > 0) {
-                    // Gradio Label object format with confidence array
-                    const topResult = data.confidences.reduce((prev, current) => 
-                        (prev.confidence > current.confidence) ? prev : current
-                    );
+
+                if (data && data.confidences) {
+                    const topResult = data.confidences[0]; // Already sorted by top_classes in your py file
                     topLabel = topResult.label;
                     topProb = topResult.confidence;
-                } else if (data && typeof data === 'object') {
-                    // Dictionary format
+                } else if (typeof data === 'object') {
+                    // Fallback for different dictionary formats
                     for (const [label, prob] of Object.entries(data)) {
                         if (prob > topProb) {
                             topProb = prob;
                             topLabel = label;
                         }
                     }
-                } else {
-                    throw new Error("Unexpected response format from model.");
                 }
 
-                // Format the output exactly to 2 decimal digits
                 const percentage = (topProb * 100).toFixed(2);
                 resultValue.textContent = `${topLabel}: ${percentage}%`;
-                
-                // Show result
                 resultArea.style.display = 'block';
 
             } catch (error) {
                 console.error("Error during prediction:", error);
-                resultValue.textContent = "Error processing image.";
+                resultValue.textContent = "Error: Check if Space is 'Running'";
                 resultArea.classList.add('error');
                 resultArea.style.display = 'block';
             } finally {
-                // Reset loading state
                 showBtn.disabled = false;
                 loadingIndicator.style.display = 'none';
             }
